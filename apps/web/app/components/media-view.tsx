@@ -332,7 +332,12 @@ export const MediaView = memo(function MediaView({
       ) : (
         <div className="animate-in fade-in space-y-6 duration-300">
           <GeneralSection generalTrack={General} />
-          <VideoSection videoTracks={VideoTracks} />
+          <VideoSection
+            videoTracks={VideoTracks}
+            archiveSizingWarning={General?.Archive_Sizing_Warning as
+              | string
+              | undefined}
+          />
           <AudioSection
             audioTracks={AudioTracks}
             showOriginalTitles={showOriginalTitles}

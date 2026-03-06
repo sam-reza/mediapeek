@@ -52,6 +52,14 @@ export interface MediaTrackJSON {
   File_Name?: string;
   File_Extension?: string;
   FileSize?: string;
+  Archive_Name?: string;
+  Archive_Sizing_Status?: 'verified' | 'estimated';
+  Archive_Sizing_Source?:
+    | 'zip-local-header'
+    | 'zip-central-directory'
+    | 'tar-header'
+    | 'unknown';
+  Archive_Sizing_Warning?: string;
   OverallBitRate_Mode?: string;
   OverallBitRate?: string;
   Encoded_Application?: string;

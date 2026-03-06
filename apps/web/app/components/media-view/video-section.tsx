@@ -5,8 +5,10 @@ import type { MediaTrackJSON } from '~/types/media';
 
 export const VideoSection = memo(function VideoSection({
   videoTracks,
+  archiveSizingWarning,
 }: {
   videoTracks: MediaTrackJSON[];
+  archiveSizingWarning?: string;
 }) {
   if (videoTracks.length === 0) return null;
 
@@ -20,6 +22,7 @@ export const VideoSection = memo(function VideoSection({
           <VideoTrackItem
             key={video.ID ?? video.UniqueID ?? idx}
             video={video}
+            archiveSizingWarning={archiveSizingWarning}
           />
         ))}
       </div>

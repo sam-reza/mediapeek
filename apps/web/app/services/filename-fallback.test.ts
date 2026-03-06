@@ -1,3 +1,4 @@
+import type { ArchiveEntryInspection } from '@mediapeek/shared/archive-inspection';
 import type { MediaInfoResult } from '~/services/mediainfo.server';
 import { fetchMediaChunk } from '~/services/media-fetch.server';
 import { analyzeMediaBuffer } from '~/services/mediainfo.server';
@@ -52,6 +53,38 @@ const createMockZip = (name: string): Uint8Array => {
   header.set(new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]), 30 + nameBytes.length);
 
   return header;
+};
+
+const createMockZipWithDirectory = (): Uint8Array => {
+  const dirName = new TextEncoder().encode('Folder/');
+  const dirHeader = new Uint8Array(30 + dirName.length);
+  const dirView = new DataView(dirHeader.buffer);
+  dirView.setUint32(0, 0x04034b50, true);
+  dirView.setUint16(4, 20, true);
+  dirView.setUint16(8, 0, true);
+  dirView.setUint32(18, 0, true);
+  dirView.setUint32(22, 0, true);
+  dirView.setUint16(26, dirName.length, true);
+  dirView.setUint16(28, 0, true);
+  dirHeader.set(dirName, 30);
+
+  const fileName = new TextEncoder().encode('Folder/inner-video.mkv');
+  const fileHeader = new Uint8Array(30 + fileName.length + 4);
+  const fileView = new DataView(fileHeader.buffer);
+  fileView.setUint32(0, 0x04034b50, true);
+  fileView.setUint16(4, 20, true);
+  fileView.setUint16(8, 0, true);
+  fileView.setUint32(18, 4, true);
+  fileView.setUint32(22, 4, true);
+  fileView.setUint16(26, fileName.length, true);
+  fileView.setUint16(28, 0, true);
+  fileHeader.set(fileName, 30);
+  fileHeader.set(new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]), 30 + fileName.length);
+
+  const buffer = new Uint8Array(dirHeader.length + fileHeader.length);
+  buffer.set(dirHeader, 0);
+  buffer.set(fileHeader, dirHeader.length);
+  return buffer;
 };
 
 describe('fetchMediaChunk filename fallback', () => {
@@ -188,6 +221,40 @@ describe('fetchMediaChunk filename fallback', () => {
     expect(result.filename).toBe(proxiedFilename);
     expect(result.filenameSource).toBe('content-disposition-get');
   });
+
+  it('uses the first real archive entry size for stored zip analysis', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        makeResponse(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-length': '999',
+            'content-disposition': 'attachment; filename="outer.zip"',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeResponse(createMockZipWithDirectory(), {
+          status: 206,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-range': 'bytes 0-255/999',
+          },
+        }),
+      );
+
+    const result = await fetchMediaChunk('https://example.com/archive');
+
+    expect(result.fileSize).toBe(4);
+    expect(Array.from(result.buffer)).toEqual([0xaa, 0xbb, 0xcc, 0xdd]);
+    expect(result.archiveEntry).toMatchObject({
+      name: 'Folder/inner-video.mkv',
+      sizeStatus: 'verified',
+      sizeSource: 'zip-local-header',
+    });
+    expect(result.diagnostics.resolvedFilename).toBe('Folder/inner-video.mkv');
+  });
 });
 
 describe('analyzeMediaBuffer filename fallback', () => {
@@ -297,5 +364,40 @@ describe('analyzeMediaBuffer filename fallback', () => {
     expect(result.resolvedFilenameSource).toBe('archive-inner');
     expect(generalTrack?.CompleteName).toBe('inner-video.mkv');
     expect(generalTrack?.Archive_Name).toBe('outer.zip');
+  });
+
+  it('adds archive sizing warnings when the inner archive size is estimated', async () => {
+    mockAnalyzeDataResult = {
+      media: {
+        track: [{ '@type': 'General' }],
+      },
+    };
+
+    const archiveEntry: ArchiveEntryInspection = {
+      name: 'inner-video.mkv',
+      archiveKind: 'zip',
+      compression: 'deflate',
+      dataOffset: 0,
+      sizeStatus: 'estimated',
+      sizeSource: 'unknown',
+    };
+
+    const result = await analyzeMediaBuffer(
+      new Uint8Array([0, 1, 2, 3]),
+      999,
+      'outer.zip',
+      'content-disposition-get',
+      ['json'],
+      archiveEntry,
+    );
+    const json = JSON.parse(result.results.json) as MediaInfoResult;
+    const generalTrack = json.media?.track?.find((t) => t['@type'] === 'General');
+
+    expect(generalTrack?.Archive_Name).toBe('outer.zip');
+    expect(generalTrack?.Archive_Sizing_Status).toBe('estimated');
+    expect(generalTrack?.Archive_Sizing_Source).toBe('unknown');
+    expect(generalTrack?.Archive_Sizing_Warning).toContain(
+      'may be inaccurate',
+    );
   });
 });

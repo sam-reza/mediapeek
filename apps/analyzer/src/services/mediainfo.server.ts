@@ -1,4 +1,8 @@
 import {
+  ARCHIVE_SIZING_WARNING,
+  type ArchiveEntryInspection,
+} from '@mediapeek/shared/archive-inspection';
+import {
   type FilenameSource,
   getMediaInfoMetadataFilename,
 } from '@mediapeek/shared/filename-resolution';
@@ -40,6 +44,13 @@ export interface MediaInfoResult extends Record<string, unknown> {
       Title?: string;
       Movie?: string;
       Archive_Name?: string;
+      Archive_Sizing_Status?: 'verified' | 'estimated';
+      Archive_Sizing_Source?:
+        | 'zip-local-header'
+        | 'zip-central-directory'
+        | 'tar-header'
+        | 'unknown';
+      Archive_Sizing_Warning?: string;
       [key: string]: unknown;
     }[];
   };
@@ -90,6 +101,7 @@ export async function analyzeMediaBuffer(
   filenameSource: FilenameSource = 'url',
   requestedFormats: string[] = [],
   cpuBudgetMs: number = DEFAULT_ANALYSIS_CPU_BUDGET_MS,
+  archiveEntry?: ArchiveEntryInspection,
 ): Promise<MediaInfoAnalysis> {
   const tStart = performance.now();
 
@@ -106,8 +118,8 @@ export async function analyzeMediaBuffer(
   // Attempt to detect inner file from archive (Container Peeking)
   // OPTIMIZATION: Only scan for inner files if the filename extension suggests an archive.
   // This prevents wasting CPU scanning every MKV/MP4 file for zip headers.
-  let archiveInnerName: string | null = null;
-  if (isArchiveExtension(filename)) {
+  let archiveInnerName: string | null = archiveEntry?.name ?? null;
+  if (!archiveInnerName && isArchiveExtension(filename)) {
     archiveInnerName = extractFirstFileFromArchive(fileBuffer);
   }
 
@@ -216,6 +228,16 @@ export async function analyzeMediaBuffer(
 
                   if (archiveName) {
                     generalTrack.Archive_Name = archiveName;
+                  }
+                  if (archiveEntry) {
+                    generalTrack.Archive_Sizing_Status =
+                      archiveEntry.sizeStatus;
+                    generalTrack.Archive_Sizing_Source =
+                      archiveEntry.sizeSource;
+                    if (archiveEntry.sizeStatus === 'estimated') {
+                      generalTrack.Archive_Sizing_Warning =
+                        ARCHIVE_SIZING_WARNING;
+                    }
                   }
                 }
               }

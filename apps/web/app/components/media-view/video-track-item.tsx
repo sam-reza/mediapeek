@@ -3,14 +3,17 @@ import { memo } from 'react';
 import { cleanBitrateString, mapDolbyProfile } from '~/lib/formatters';
 import type { MediaTrackJSON } from '~/types/media';
 
+import { ArchiveEstimateTooltip } from './archive-estimate-tooltip';
 import { MediaDetailItem } from './media-detail-item';
 
 interface VideoTrackItemProps {
   video: MediaTrackJSON;
+  archiveSizingWarning?: string;
 }
 
 export const VideoTrackItem = memo(function VideoTrackItem({
   video,
+  archiveSizingWarning,
 }: VideoTrackItemProps) {
   let codec = video.Format;
   const formatInfo = video.Format_Info ?? video['Format/Info'];
@@ -66,8 +69,9 @@ export const VideoTrackItem = memo(function VideoTrackItem({
       {bitrateStr && (
         <MediaDetailItem label="Bitrate">
           <div className="flex flex-col">
-            <span className="text-foreground/85 font-semibold">
-              {bitrateStr}
+            <span className="text-foreground/85 inline-flex items-center gap-2 font-semibold">
+              <span>{bitrateStr}</span>
+              <ArchiveEstimateTooltip warning={archiveSizingWarning} />
             </span>
             {video.BitRate_Mode && (
               <span className="text-muted-foreground text-xs font-normal">

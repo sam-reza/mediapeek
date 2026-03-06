@@ -146,6 +146,7 @@ const routes = app.post(
           filename,
           filenameSource,
           diagnostics: fetchDiag,
+          archiveEntry,
         } = await fetchMediaChunk(url);
         customContext.fetch = fetchDiag;
         customContext.fileSize = fileSize;
@@ -164,6 +165,7 @@ const routes = app.post(
           filenameSource,
           format,
           cpuBudgetMs,
+          archiveEntry,
         );
 
         customContext.analysis = analysisDiag;

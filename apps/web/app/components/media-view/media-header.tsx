@@ -5,6 +5,7 @@ import { OptionsMenu } from '~/components/media-view/options-menu';
 import { getMediaBadges, isValidFilename } from '~/lib/media-utils';
 import type { MediaTrackJSON } from '~/types/media';
 
+import { ArchiveEstimateTooltip } from './archive-estimate-tooltip';
 import { MediaIcon } from './media-icon';
 
 interface MediaHeaderProps {
@@ -83,6 +84,9 @@ export const MediaHeader = memo(function MediaHeader({
     durationRaw ??
     (generalTrack['Duration/String'] as string | undefined) ??
     (generalTrack.Duration as string | undefined);
+  const archiveSizingWarning = generalTrack.Archive_Sizing_Warning as
+    | string
+    | undefined;
 
   return (
     <div className="bg-background/95 supports-backdrop-filter:bg-background/60 sticky top-0 z-50 -mx-4 flex flex-col gap-4 px-4 pt-4 pb-0 backdrop-blur-md transition-all md:-mx-8 md:px-8">
@@ -102,7 +106,10 @@ export const MediaHeader = memo(function MediaHeader({
           {fileSize && (
             <>
               <span className="opacity-30">|</span>
-              <span>{fileSize}</span>
+              <span className="inline-flex items-center gap-2">
+                <span>{fileSize}</span>
+                <ArchiveEstimateTooltip warning={archiveSizingWarning} />
+              </span>
             </>
           )}
 

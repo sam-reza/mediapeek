@@ -1,6 +1,8 @@
 import { getString } from '~/lib/type-guards';
 
 const COMMON_AUDIO_TERMS_TO_REMOVE = [
+  'Hi-Res Lossless',
+  'Hi-Res',
   'Lossless',
   '16-bit',
   '24-bit',
@@ -126,10 +128,11 @@ const removeKeywords = (text: string, keywords: string[]): string => {
   for (const word of sorted) {
     if (!word || word.length < 2) continue;
 
-    // Exact word boundary match with escaping
+    // Match isolated metadata tokens while still supporting punctuation-heavy
+    // codec labels such as "DD+", "E-AC-3", and "DTS-HD".
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
-    processed = processed.replace(regex, '');
+    const regex = new RegExp(`(^|[^A-Za-z0-9])${escaped}(?=$|[^A-Za-z0-9])`, 'gi');
+    processed = processed.replace(regex, '$1');
   }
 
   return processed;
@@ -256,7 +259,8 @@ export const cleanAudioTrackTitle = (
   // 1. Language Removal
   if (langName) {
     const cleaned = cleanTrackTitle(processingTitle, langName);
-    if (cleaned !== null && cleaned !== undefined) processingTitle = cleaned;
+    if (cleaned === null || cleaned === undefined) return null;
+    processingTitle = cleaned;
   }
 
   // 2. Identify Keywords to Remove
@@ -310,7 +314,8 @@ export const cleanSubtitleTrackTitle = (
   // 1. Language Removal
   if (langName) {
     const cleaned = cleanTrackTitle(processingTitle, langName);
-    if (cleaned !== null && cleaned !== undefined) processingTitle = cleaned;
+    if (cleaned === null || cleaned === undefined) return null;
+    processingTitle = cleaned;
   }
 
   // 2. Identify Keywords to Remove

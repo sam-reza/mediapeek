@@ -106,7 +106,7 @@ Test with these sample URLs:
 
 ### Archive Bitrate Accuracy
 
-When analyzing media files contained within archives (such as `.zip` or `.tar`), the reported bitrate may be inaccurate. This limitation occurs because the analysis engine streams the inner file and may estimate bitrate based on incomplete size data.
+When analyzing media files contained within archives (such as `.zip` or `.tar`), MediaPeek now corrects file size and bitrate when the inner entry size can be verified from archive metadata. If the inner size cannot be verified reliably, the UI marks the result as archive-estimated with an info tooltip because file size and bitrate may still be inaccurate.
 
 ## License
 

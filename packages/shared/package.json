@@ -19,6 +19,7 @@
   },
   "exports": {
     "./analyze-contract": "./src/analyze-contract.ts",
+    "./archive-inspection": "./src/archive-inspection.ts",
     "./telemetry": "./src/telemetry.ts",
     "./schemas": "./src/schemas.ts",
     "./media": "./src/media.ts",

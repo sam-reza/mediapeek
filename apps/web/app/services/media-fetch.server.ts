@@ -49,6 +49,27 @@ export async function fetchMediaChunk(
 
   validateUrl(targetUrl);
 
+  const resolveResponseFileSize = (response: Response): number | undefined => {
+    const contentRange = response.headers.get('content-range');
+    if (contentRange) {
+      const match = /\/(\d+)$/.exec(contentRange);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
+    }
+
+    if (response.status === 206) {
+      return undefined;
+    }
+
+    const contentLength = response.headers.get('content-length');
+    if (!contentLength) {
+      return undefined;
+    }
+
+    return parseInt(contentLength, 10);
+  };
+
   // 1. Initial Request (HEAD with fallback to GET)
   const tHead = performance.now();
   let probeMethod = 'HEAD';
@@ -102,23 +123,7 @@ export async function fetchMediaChunk(
     }
   }
 
-  // Determine file size (support Content-Range for partial content responses)
-  let fileSize: number | undefined;
-  const contentRange = headRes.headers.get('content-range');
-  if (contentRange) {
-    const match = /\/(\d+)$/.exec(contentRange);
-    if (match) {
-      fileSize = parseInt(match[1], 10);
-    }
-  }
-
-  // Fallback to Content-Length if no Content-Range
-  if (!fileSize) {
-    const cl = headRes.headers.get('content-length');
-    if (cl) {
-      fileSize = parseInt(cl, 10);
-    }
-  }
+  let fileSize = resolveResponseFileSize(headRes);
 
   // We no longer throw if fileSize is unknown. We proceed with best effort.
 
@@ -149,6 +154,10 @@ export async function fetchMediaChunk(
   });
   diagnostics.fetchRequestDurationMs = Math.round(performance.now() - tFetch);
   diagnostics.responseStatus = response.status;
+
+  if (!fileSize) {
+    fileSize = resolveResponseFileSize(response);
+  }
 
   if (filenameSource === 'url') {
     const getFilename = parseContentDispositionFilename(

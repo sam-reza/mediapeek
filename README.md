@@ -118,6 +118,6 @@ When analyzing media files contained within archives (such as `.zip` or `.tar`),
 
 - **PrivateBin**: Enables secure sharing of results. ([License](https://github.com/PrivateBin/PrivateBin/blob/master/LICENSE.md))
 
-- **Apple Services Badges**: The video format badges (Dolby, Immersive, 3D, HD, 4K, HDR, HDR10+) are sourced from [Apple TV](https://tv.apple.com/), while the audio badges (Lossless, Hi-Res Lossless, Apple Digital Master, Spatial Audio, AAC) are sourced from [Apple Music](https://music.apple.com/). Special thanks to @SuperSaltyGamer for providing the Apple Music SVG badges. These designs were selected for their visual perfection and clarity, which align seamlessly with MediaPeek's aesthetic.
+- **Apple Services Badges**: Video badge assets, including SD, HD, 4K, HDR, HDR10+, Dolby, Immersive, and 3D, are sourced from [Apple TV](https://tv.apple.com/), while audio badge assets (Lossless, Hi-Res Lossless, Apple Digital Master, Spatial Audio, AAC) are sourced from [Apple Music](https://music.apple.com/). Special thanks to @SuperSaltyGamer for providing the Apple Music SVG badges. These designs were selected for their visual clarity and strong fit with MediaPeek's interface.
 
 - **Cloudflare Workers**: Hosted on [Cloudflare Workers](https://workers.cloudflare.com/). MediaPeek benefits from their generous free tier.

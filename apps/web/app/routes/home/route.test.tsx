@@ -31,6 +31,17 @@ describe('HomeRoute', () => {
     expect(
       screen.getByText(/built in public, maintained on GitHub/i),
     ).toBeTruthy();
+    expect(screen.getByText(/metadata engine/i)).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: /mediainfo\.js v0\.3\.7/i }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: /mediainfolib v25\.10/i }),
+    ).toBeTruthy();
+    expect(container.querySelector('img[src="/badges/mediainfo.svg"]')).toBeTruthy();
+    expect(
+      container.querySelector('img[src="/badges/mediainfo-light.svg"]'),
+    ).toBeTruthy();
 
     const repositoryLink = screen.getByRole('link', {
       name: /view source code/i,

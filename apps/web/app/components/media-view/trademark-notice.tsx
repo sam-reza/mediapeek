@@ -59,11 +59,11 @@ export function TrademarkNotice({ badges }: TrademarkNoticeProps) {
   if (notices.length === 0) return null;
 
   return (
-    <div className="border-border/40 mt-8 space-y-2 border-t pt-6">
+    <div>
       {notices.map((notice, idx) => (
         <p
           key={idx}
-          className="text-muted-foreground/60 text-[10px] leading-relaxed"
+          className="text-muted-foreground text-xs leading-relaxed [&+&]:mt-3"
         >
           {notice}
         </p>

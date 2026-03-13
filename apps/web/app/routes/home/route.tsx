@@ -22,7 +22,7 @@ export const meta: Route.MetaFunction = () => {
     {
       name: 'description',
       content:
-        'Inspect media metadata from URL sources in a clear and reliable interface.',
+        'Inspect media metadata from a URL in a clear, reliable interface.',
     },
   ];
 };
@@ -32,10 +32,10 @@ const features = [
     id: 'edge-analysis',
     title: 'Edge Analysis',
     summary:
-      'Fetches only necessary data segments without downloading the entire file.',
+      'Fetch only the data needed instead of downloading the full file.',
     points: [
-      'Optimized for byte-range requests to reduce transfer and wait time.',
-      'Built for large assets where full downloads are wasteful.',
+      'Uses byte-range requests to reduce transfer and wait time.',
+      'Works well with large files when full downloads are unnecessary.',
       'Processing runs on edge infrastructure close to users.',
     ],
   },
@@ -43,18 +43,17 @@ const features = [
     id: 'archive-extraction',
     title: 'Archive Extraction',
     summary:
-      'Transparently unpacks media from common archives while preserving file context.',
+      'Open common archives while keeping file context intact.',
     points: [
-      'ZIP support: Stored and DEFLATE-compressed archives.',
-      'TAR support: Standard tar archives including @LongLink extended headers.',
-      'Displays archive name alongside inner filename for clear provenance.',
+      'ZIP: Supports stored and DEFLATE-compressed archives.',
+      'TAR: Supports standard tar archives, including @LongLink extended headers.',
+      'Shows the archive name with the inner filename for clearer source context.',
     ],
   },
   {
     id: 'supported-sources',
     title: 'Supported Sources',
-    summary:
-      'Works with modern remote media sources used by developers and everyday users.',
+    summary: 'Works with common remote media sources.',
     points: [
       'Web servers: HTTP/HTTPS URLs with byte-range optimization.',
       'Google Drive: Public files and folders.',
@@ -63,17 +62,17 @@ const features = [
   {
     id: 'secure-sharing',
     title: 'Secure Sharing',
-    summary: 'Share results with end-to-end encryption through PrivateBin.',
-    points: ['Sharing flow is designed for privacy-first collaboration.'],
+    summary: 'Share results through end-to-end encrypted PrivateBin links.',
+    points: ['Sharing is designed for privacy-focused collaboration.'],
   },
   {
     id: 'output-formats',
     title: 'Output Formats',
     summary:
-      'Export metadata in multiple formats for analysis, automation, or archival.',
+      'Export metadata in multiple formats for review, automation, or archiving.',
     points: [
-      'Supported outputs: Object, JSON, Text, HTML, XML.',
-      'Readable formats help non-technical users review file properties.',
+      'Available formats: Object, JSON, Text, HTML, XML.',
+      'Readable formats make file properties easier to review.',
     ],
   },
 ] as const;
@@ -84,6 +83,7 @@ const badges = [
   'hdr',
   'hdr10-plus',
   '4k',
+  'sd',
   'hd',
   'imax',
   'dts',
@@ -140,8 +140,7 @@ export default function HomeRoute() {
               MediaPeek
             </h1>
             <p className="text-muted-foreground mt-5 max-w-3xl text-lg leading-relaxed sm:text-xl">
-              Inspect media metadata from URL sources in a clear and reliable
-              interface.
+              Inspect media metadata from a URL in a clear, reliable interface.
             </p>
             <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
               <Link
@@ -174,8 +173,7 @@ export default function HomeRoute() {
               Key Features
             </h2>
             <p className="text-muted-foreground mt-3 max-w-3xl text-lg leading-relaxed">
-              Clean, high-density feature summaries with technical depth built
-              directly into the layout.
+              A quick view of the capabilities built into MediaPeek.
             </p>
           </div>
 
@@ -233,8 +231,8 @@ export default function HomeRoute() {
                 Format badges
               </CardTitle>
               <CardDescription className="max-w-3xl text-base leading-relaxed">
-                Carefully extracted badge assets inspired by Apple TV and other
-                platforms for consistent, high-fidelity media labeling.
+                Badge assets are sourced from Apple TV and Apple Music for
+                consistent media labeling.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -253,89 +251,79 @@ export default function HomeRoute() {
                   </div>
                 ))}
               </div>
+              <div className="text-muted-foreground mt-6 space-y-2 text-sm leading-relaxed">
+                <p>
+                  SD, HD, 4K, HDR, HDR10+, and related video badge assets are
+                  sourced from Apple TV.
+                </p>
+                <p>
+                  Lossless, Hi-Res Lossless, Apple Digital Master, Spatial
+                  Audio, and AAC badge assets are sourced from Apple Music.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </section>
 
         <section className="mx-auto w-full max-w-5xl px-4 pb-16 sm:px-12 sm:pb-20">
-          <Card className="border-border/70 from-muted/20 to-background bg-linear-to-b">
-            <CardHeader className="border-b pb-5">
-              <div className="flex items-center gap-4">
-                <img
-                  src="/badges/mediainfo.svg"
-                  alt="MediaInfo Logo"
-                  className="h-14 w-14 object-contain"
-                />
-                <div>
-                  <CardTitle className="text-2xl font-semibold tracking-tight">
-                    Metadata Engine
-                  </CardTitle>
-                  <CardDescription className="max-w-3xl text-base leading-relaxed">
-                    <a
-                      href={METADATA_ENGINE.mediainfoJs.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="hover:text-foreground underline underline-offset-4 transition-colors"
-                    >
-                      mediainfo.js v{METADATA_ENGINE.mediainfoJs.version}
-                    </a>{' '}
-                    /{' '}
-                    <a
-                      href={METADATA_ENGINE.mediaInfoLib.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="hover:text-foreground underline underline-offset-4 transition-colors"
-                    >
-                      MediaInfoLib v{METADATA_ENGINE.mediaInfoLib.version}
-                    </a>
-                  </CardDescription>
+          <div className="from-muted/35 via-background to-muted/10 border-border/70 overflow-hidden rounded-[2rem] border bg-linear-to-br">
+            <div className="space-y-6 px-6 py-8 sm:px-10 sm:py-10">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+                <div className="shrink-0">
+                  <img
+                    src="/badges/mediainfo.svg"
+                    alt="MediaInfo Logo"
+                    className="h-16 w-16 object-contain dark:hidden"
+                  />
+                  <img
+                    src="/badges/mediainfo-light.svg"
+                    alt="MediaInfo Logo"
+                    className="hidden h-16 w-16 object-contain dark:block"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <h2 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
+                    Metadata engine
+                  </h2>
+                  <p className="text-muted-foreground max-w-3xl text-base leading-relaxed sm:text-lg">
+                    MediaPeek uses mediainfo.js for metadata analysis. It runs
+                    through WebAssembly and is based on MediaInfoLib.
+                  </p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+
+              <div className="border-border/60 text-muted-foreground flex flex-col gap-2 border-y py-4 text-sm leading-relaxed sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
+                <a
+                  href={METADATA_ENGINE.mediainfoJs.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-foreground underline underline-offset-4 transition-colors"
+                >
+                  mediainfo.js v{METADATA_ENGINE.mediainfoJs.version}
+                </a>
+                <a
+                  href={METADATA_ENGINE.mediaInfoLib.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-foreground underline underline-offset-4 transition-colors"
+                >
+                  MediaInfoLib v{METADATA_ENGINE.mediaInfoLib.version}
+                </a>
+                <p>Metadata parsing runs in WebAssembly.</p>
+              </div>
+
               <p className="text-muted-foreground text-sm leading-relaxed">
-                MediaPeek uses mediainfo.js as the metadata analysis layer. The
-                library runs through WebAssembly and is based on MediaInfoLib.
-              </p>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Analysis by mediainfo.js, a WebAssembly port of MediaInfo
+                Analysis uses mediainfo.js, a WebAssembly port of MediaInfo
                 library, Copyright (c) 2002-2026 MediaArea.net SARL.
               </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </section>
 
         <section className="mx-auto w-full max-w-5xl px-4 pb-16 sm:px-12 sm:pb-20">
           <div className="from-muted/35 via-background to-muted/15 border-border/70 overflow-hidden rounded-[2rem] border bg-linear-to-br">
-            <div className="grid gap-10 px-6 py-8 sm:px-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+            <div className="px-6 py-8 sm:px-10 sm:py-10">
               <div className="space-y-6">
-                <div className="space-y-3">
-                  <h2 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-                    Built in public, maintained on GitHub.
-                  </h2>
-                  <p className="text-muted-foreground max-w-2xl text-base leading-relaxed sm:text-lg">
-                    MediaPeek is open source. Browse the repository on GitHub,
-                    review issues, track releases, and follow the project as it
-                    evolves.
-                  </p>
-                </div>
-
-                <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                  <a
-                    href="https://github.com/DG02002/mediapeek"
-                    target="_blank"
-                    rel="noreferrer"
-                    className={cn(
-                      buttonVariants({ size: 'lg', variant: 'outline' }),
-                      'min-w-48',
-                    )}
-                  >
-                    View Source Code
-                  </a>
-                </div>
-              </div>
-
-              <div className="flex items-start justify-start lg:justify-end">
                 <div
                   className="inline-flex"
                   data-testid="github-brand-lockup"
@@ -353,21 +341,55 @@ export default function HomeRoute() {
                     className="hidden h-8 w-auto object-contain dark:block"
                   />
                 </div>
+
+                <div className="space-y-3">
+                  <h2 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
+                    Built in public, maintained on GitHub.
+                  </h2>
+                  <p className="text-muted-foreground max-w-2xl text-base leading-relaxed sm:text-lg">
+                    MediaPeek is open source. Browse the repository on GitHub,
+                    review issues, track releases, and follow development.
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+                  <a
+                    href="https://github.com/DG02002/mediapeek"
+                    target="_blank"
+                    rel="noreferrer"
+                    className={cn(
+                      buttonVariants({ size: 'lg', variant: 'outline' }),
+                      'min-w-48',
+                    )}
+                  >
+                    View Source Code
+                  </a>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
         <section className="mx-auto w-full max-w-5xl px-4 pb-16 sm:px-12 sm:pb-20">
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Trademark & Attribution Notices
-          </h2>
-          <div className="text-muted-foreground mt-4 space-y-3 text-xs leading-relaxed">
-            <p>
-              Apple Services badges are sourced from Apple TV and Apple Music.
-            </p>
+          <div className="from-muted/35 via-background to-muted/10 border-border/70 overflow-hidden rounded-[2rem] border bg-linear-to-br">
+            <div className="space-y-6 px-6 py-8 sm:px-10 sm:py-10">
+              <div className="space-y-3">
+                <h2 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Trademark and attribution notices
+                </h2>
+                <p className="text-muted-foreground max-w-3xl text-base leading-relaxed sm:text-lg">
+                  Third-party marks remain the property of their respective
+                  owners. MediaPeek references them for identification only.
+                </p>
+              </div>
+
+              <div className="border-border/60 text-muted-foreground border-y py-4 text-sm leading-relaxed">
+                <p>Trademark notices are shown for the formats displayed above.</p>
+              </div>
+
+              <TrademarkNotice badges={trademarkBadges} />
+            </div>
           </div>
-          <TrademarkNotice badges={trademarkBadges} />
         </section>
       </main>
       <Footer />

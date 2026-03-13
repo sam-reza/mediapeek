@@ -102,6 +102,7 @@ export async function analyzeMediaBuffer(
   requestedFormats: string[] = [],
   cpuBudgetMs: number = DEFAULT_ANALYSIS_CPU_BUDGET_MS,
   archiveEntry?: ArchiveEntryInspection,
+  remoteReadChunk?: (size: number, offset: number) => Promise<Uint8Array>,
 ): Promise<MediaInfoAnalysis> {
   const tStart = performance.now();
 
@@ -192,8 +193,11 @@ export async function analyzeMediaBuffer(
 
           const resultData = await infoInstance.analyzeData(
             () => effectiveFileSize,
-            (size: number, offset: number) => {
+            async (size: number, offset: number) => {
               checkCpuBudget(tStart, cpuBudgetMs);
+              if (remoteReadChunk) {
+                return remoteReadChunk(size, offset);
+              }
               return readChunk(size, offset);
             },
           );

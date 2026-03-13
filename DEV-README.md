@@ -162,8 +162,8 @@ pnpm --filter mediapeek-analyzer exec wrangler secret put ANALYZE_API_KEY
 Run from repo root:
 
 ```bash
-pnpm --filter mediapeek-analyzer deploy
-pnpm --filter mediapeek-web deploy
+pnpm --filter mediapeek-analyzer run deploy
+pnpm --filter mediapeek-web run deploy
 ```
 
 ## Validation

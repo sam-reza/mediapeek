@@ -29,6 +29,8 @@ export interface FetchDiagnostics {
   firstByteReadTimeoutMs?: number;
   firstByteReadRetries?: number;
   firstByteReadStrategy?: 'range' | 'no_range_fallback';
+  seekFetchCount?: number;
+  seekBytesFetched?: number;
   streamCloseError?: string;
 }
 
@@ -36,10 +38,19 @@ const FIRST_BYTE_READ_TIMEOUT_MS = 15_000;
 const MAX_FIRST_BYTE_READ_RETRIES = 1;
 const NO_RANGE_FALLBACK_TIMEOUT_MS = 25_000;
 const SAFE_LIMIT = 10 * 1024 * 1024;
+const REMOTE_RANGE_CHUNK_SIZE = 2 * 1024 * 1024;
+const REMOTE_RANGE_FETCH_LIMIT = 8 * 1024 * 1024;
+const REMOTE_RANGE_CACHE_LIMIT = 32 * 1024 * 1024;
 const ZIP_TAIL_INSPECTION_BYTES = 128 * 1024;
+
+export interface MediaByteSource {
+  initialBuffer: Uint8Array;
+  readChunk: (size: number, offset: number) => Promise<Uint8Array>;
+}
 
 export interface MediaFetchResult {
   buffer: Uint8Array;
+  byteSource?: MediaByteSource;
   filename: string;
   filenameSource: FilenameSource;
   fileSize?: number;
@@ -257,6 +268,186 @@ const fetchZipTailBuffer = async (
   }
 
   return new Uint8Array(await response.arrayBuffer());
+};
+
+const createRemoteByteSource = (
+  url: string,
+  initialBuffer: Uint8Array,
+  fileSize: number | undefined,
+  diagnostics: Partial<FetchDiagnostics>,
+): MediaByteSource => {
+  const cache = new Map<number, { bytes: Uint8Array; lastUsed: number }>();
+  const remoteBaseOffset = initialBuffer.byteLength;
+  let cacheBytes = 0;
+  let accessCounter = 0;
+
+  const getRemoteChunkStart = (offset: number) => {
+    const delta = offset - remoteBaseOffset;
+    return (
+      remoteBaseOffset +
+      Math.floor(delta / REMOTE_RANGE_CHUNK_SIZE) * REMOTE_RANGE_CHUNK_SIZE
+    );
+  };
+
+  const getRemoteSpanEnd = (chunkStart: number, requestedEnd: number) => {
+    const desiredEnd = Math.max(chunkStart + REMOTE_RANGE_CHUNK_SIZE, requestedEnd);
+    const boundedEnd = Math.min(
+      desiredEnd,
+      chunkStart + REMOTE_RANGE_FETCH_LIMIT,
+    );
+    if (fileSize === undefined) {
+      return boundedEnd;
+    }
+    return Math.min(fileSize, boundedEnd);
+  };
+
+  const touchChunk = (chunkStart: number) => {
+    const cached = cache.get(chunkStart);
+    if (!cached) return;
+    cached.lastUsed = ++accessCounter;
+  };
+
+  const setChunk = (chunkStart: number, bytes: Uint8Array) => {
+    const existing = cache.get(chunkStart);
+    if (existing) {
+      cacheBytes -= existing.bytes.byteLength;
+    }
+
+    cache.set(chunkStart, {
+      bytes,
+      lastUsed: ++accessCounter,
+    });
+    cacheBytes += bytes.byteLength;
+
+    while (cacheBytes > REMOTE_RANGE_CACHE_LIMIT && cache.size > 0) {
+      let oldestKey: number | null = null;
+      let oldestAccess = Number.POSITIVE_INFINITY;
+
+      for (const [key, value] of cache.entries()) {
+        if (value.lastUsed < oldestAccess) {
+          oldestKey = key;
+          oldestAccess = value.lastUsed;
+        }
+      }
+
+      if (oldestKey === null) break;
+      const removed = cache.get(oldestKey);
+      if (!removed) break;
+      cache.delete(oldestKey);
+      cacheBytes -= removed.bytes.byteLength;
+    }
+  };
+
+  const fetchRemoteSpan = async (offset: number, requestedEnd: number) => {
+    const spanStart = getRemoteChunkStart(offset);
+    const spanEnd = getRemoteSpanEnd(spanStart, requestedEnd);
+    if (spanEnd <= spanStart) {
+      return;
+    }
+
+    const response = await fetch(url, {
+      headers: getEmulationHeaders(
+        `bytes=${String(spanStart)}-${String(spanEnd - 1)}`,
+      ),
+      redirect: 'follow',
+    });
+    assertByteFetchStatus(response);
+
+    const body = new Uint8Array(await response.arrayBuffer());
+    diagnostics.seekFetchCount = (diagnostics.seekFetchCount ?? 0) + 1;
+    diagnostics.seekBytesFetched =
+      (diagnostics.seekBytesFetched ?? 0) + body.byteLength;
+
+    let responseStart = spanStart;
+    if (response.status === 200 && spanStart > 0) {
+      if (body.byteLength <= spanStart) {
+        throw new Error('Origin ignored byte-range seek request.');
+      }
+      responseStart = 0;
+    }
+
+    for (
+      let chunkStart = spanStart;
+      chunkStart < spanEnd;
+      chunkStart += REMOTE_RANGE_CHUNK_SIZE
+    ) {
+      const sliceStart = chunkStart - responseStart;
+      if (sliceStart < 0 || sliceStart >= body.byteLength) {
+        break;
+      }
+
+      const sliceEnd = Math.min(
+        sliceStart + REMOTE_RANGE_CHUNK_SIZE,
+        body.byteLength,
+      );
+      const chunkBytes = body.slice(sliceStart, sliceEnd);
+      if (chunkBytes.byteLength === 0) {
+        break;
+      }
+      setChunk(chunkStart, chunkBytes);
+    }
+  };
+
+  return {
+    initialBuffer,
+    async readChunk(size: number, offset: number) {
+      if (size <= 0 || offset < 0) {
+        return new Uint8Array(0);
+      }
+
+      const requestedEnd =
+        fileSize === undefined ? offset + size : Math.min(fileSize, offset + size);
+      if (requestedEnd <= offset) {
+        return new Uint8Array(0);
+      }
+
+      if (requestedEnd <= initialBuffer.byteLength) {
+        return initialBuffer.subarray(offset, requestedEnd);
+      }
+
+      const result = new Uint8Array(requestedEnd - offset);
+      let cursor = offset;
+      let writeOffset = 0;
+
+      while (cursor < requestedEnd) {
+        if (cursor < initialBuffer.byteLength) {
+          const prefixEnd = Math.min(requestedEnd, initialBuffer.byteLength);
+          const prefixSlice = initialBuffer.subarray(cursor, prefixEnd);
+          result.set(prefixSlice, writeOffset);
+          writeOffset += prefixSlice.byteLength;
+          cursor = prefixEnd;
+          continue;
+        }
+
+        const chunkStart = getRemoteChunkStart(cursor);
+        let cached = cache.get(chunkStart);
+        if (!cached) {
+          await fetchRemoteSpan(cursor, requestedEnd);
+          cached = cache.get(chunkStart);
+        }
+        if (!cached || cached.bytes.byteLength === 0) {
+          break;
+        }
+
+        touchChunk(chunkStart);
+
+        const chunkOffset = cursor - chunkStart;
+        if (chunkOffset >= cached.bytes.byteLength) {
+          break;
+        }
+
+        const available = cached.bytes.subarray(chunkOffset);
+        const bytesToCopy = Math.min(available.byteLength, requestedEnd - cursor);
+        result.set(available.subarray(0, bytesToCopy), writeOffset);
+        cursor += bytesToCopy;
+        writeOffset += bytesToCopy;
+      }
+
+      return writeOffset === result.byteLength
+        ? result
+        : result.subarray(0, writeOffset);
+    },
+  };
 };
 
 export async function fetchMediaChunk(
@@ -502,6 +693,9 @@ export async function fetchMediaChunk(
 
   const result: MediaFetchResult = {
     buffer: analysisBuffer,
+    byteSource: archiveEntry
+      ? undefined
+      : createRemoteByteSource(targetUrl, rawBuffer, fileSize, diagnostics),
     filename,
     filenameSource,
     fileSize,

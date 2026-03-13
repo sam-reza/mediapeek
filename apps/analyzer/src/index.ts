@@ -142,6 +142,7 @@ const routes = app.post(
         // 1. Fetch
         const {
           buffer,
+          byteSource,
           fileSize,
           filename,
           filenameSource,
@@ -166,6 +167,7 @@ const routes = app.post(
           format,
           cpuBudgetMs,
           archiveEntry,
+          byteSource?.readChunk,
         );
 
         customContext.analysis = analysisDiag;

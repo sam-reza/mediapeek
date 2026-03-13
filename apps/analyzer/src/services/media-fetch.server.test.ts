@@ -112,4 +112,62 @@ describe('fetchMediaChunk', () => {
       sizeSource: 'zip-local-header',
     });
   });
+
+  it('fetches additional byte ranges when reads seek past the initial prefix', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    fetchSpy
+      .mockResolvedValueOnce(
+        makeResponse(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-length': '30',
+            'accept-ranges': 'bytes',
+            'content-disposition': 'attachment; filename="sample.m4a"',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeResponse(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), {
+          status: 206,
+          headers: {
+            'content-type': 'application/octet-stream',
+            'content-range': 'bytes 0-9/30',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeResponse(
+          new Uint8Array([
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+            26, 27, 28, 29,
+          ]),
+          {
+            status: 206,
+            headers: {
+              'content-type': 'application/octet-stream',
+              'content-range': 'bytes 10-29/30',
+            },
+          },
+        ),
+      );
+
+    const result = await fetchMediaChunk('https://example.com/audio');
+
+    expect(result.byteSource).toBeDefined();
+    await expect(result.byteSource?.readChunk(4, 2)).resolves.toEqual(
+      new Uint8Array([2, 3, 4, 5]),
+    );
+    await expect(result.byteSource?.readChunk(4, 20)).resolves.toEqual(
+      new Uint8Array([20, 21, 22, 23]),
+    );
+    await expect(result.byteSource?.readChunk(4, 24)).resolves.toEqual(
+      new Uint8Array([24, 25, 26, 27]),
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(result.diagnostics.seekFetchCount).toBe(1);
+    expect(result.diagnostics.seekBytesFetched).toBe(20);
+  });
 });

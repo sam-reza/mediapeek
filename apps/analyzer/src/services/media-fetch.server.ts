@@ -1,3 +1,5 @@
+import type { AnalyzeProgressStage } from '@mediapeek/shared/analyze-progress';
+
 import {
   type ArchiveEntryInspection,
   inspectArchiveEntry,
@@ -59,6 +61,12 @@ export interface MediaFetchResult {
   innerFilename?: string;
   archiveEntry?: ArchiveEntryInspection;
 }
+
+export type FetchProgressReporter = (
+  stage: AnalyzeProgressStage,
+  title: string,
+  message: string,
+) => Promise<void> | void;
 
 const resolveResponseFileSize = (response: Response): number | undefined => {
   const contentRange = response.headers.get('content-range');
@@ -285,11 +293,13 @@ const createRemoteByteSource = (
   initialBuffer: Uint8Array,
   fileSize: number | undefined,
   diagnostics: Partial<FetchDiagnostics>,
+  reportProgress?: FetchProgressReporter,
 ): MediaByteSource => {
   const cache = new Map<number, { bytes: Uint8Array; lastUsed: number }>();
   const remoteBaseOffset = initialBuffer.byteLength;
   let cacheBytes = 0;
   let accessCounter = 0;
+  let didReportRemoteSeekFetch = false;
 
   const getRemoteChunkStart = (offset: number) => {
     const delta = offset - remoteBaseOffset;
@@ -356,6 +366,15 @@ const createRemoteByteSource = (
     const spanEnd = getRemoteSpanEnd(spanStart, requestedEnd);
     if (spanEnd <= spanStart) {
       return;
+    }
+
+    if (!didReportRemoteSeekFetch) {
+      didReportRemoteSeekFetch = true;
+      await reportProgress?.(
+        'remote_seek_fetch_started',
+        'Requesting Additional Bytes',
+        'The analyzer requested more bytes from the source to inspect later parts of the container.',
+      );
     }
 
     const response = await fetch(url, {
@@ -471,6 +490,7 @@ const createRemoteByteSource = (
 export async function fetchMediaChunk(
   initialUrl: string,
   chunkSize: number = SAFE_LIMIT,
+  reportProgress?: FetchProgressReporter,
 ): Promise<MediaFetchResult> {
   const tStart = performance.now();
   const diagnostics: Partial<FetchDiagnostics> = {};
@@ -482,6 +502,11 @@ export async function fetchMediaChunk(
 
   const tHead = performance.now();
   let probeMethod = 'HEAD';
+  await reportProgress?.(
+    'source_probe_started',
+    'Checking Source Headers',
+    'Sending an initial probe request to inspect the source response.',
+  );
   let headRes = await fetch(targetUrl, {
     method: 'HEAD',
     headers: getEmulationHeaders(),
@@ -540,7 +565,18 @@ export async function fetchMediaChunk(
     'range';
   let rangeReadTimedOut = false;
 
+  await reportProgress?.(
+    'source_probe_completed',
+    'Source Probe Complete',
+    `Source probe finished using ${probeMethod}. Requesting the initial media bytes now.`,
+  );
+
   for (let attempt = 0; attempt <= MAX_FIRST_BYTE_READ_RETRIES; attempt += 1) {
+    await reportProgress?.(
+      'initial_fetch_started',
+      'Requesting Initial Bytes',
+      'Fetching the first chunk needed to inspect the media container.',
+    );
     const attemptResponse = await fetch(targetUrl, {
       headers: getEmulationHeaders(`bytes=0-${String(fetchEnd)}`),
       redirect: 'follow',
@@ -556,10 +592,22 @@ export async function fetchMediaChunk(
     try {
       response = attemptResponse;
       reader = attemptReader;
+      await reportProgress?.(
+        'waiting_for_first_byte',
+        'Waiting for First Byte',
+        'The source accepted the request but has not started sending media bytes yet.',
+      );
       firstChunk = await readFirstChunkWithTimeout(
         attemptReader,
         FIRST_BYTE_READ_TIMEOUT_MS,
       );
+      if (firstChunk && firstChunk.byteLength > 0) {
+        await reportProgress?.(
+          'first_byte_received',
+          'First Bytes Received',
+          'Initial media bytes arrived. Continuing the fetch and inspection step.',
+        );
+      }
       rangeReadTimedOut = false;
       break;
     } catch (err) {
@@ -579,6 +627,11 @@ export async function fetchMediaChunk(
   }
 
   if (!response || !reader) {
+    await reportProgress?.(
+      'no_range_fallback_started',
+      'Retrying Without Range',
+      'The initial ranged read timed out, so the analyzer is retrying without a Range header.',
+    );
     const fallbackResponse = await fetch(targetUrl, {
       headers: getEmulationHeaders(),
       redirect: 'follow',
@@ -594,10 +647,22 @@ export async function fetchMediaChunk(
     try {
       response = fallbackResponse;
       reader = fallbackReader;
+      await reportProgress?.(
+        'waiting_for_first_byte',
+        'Waiting for First Byte',
+        'Waiting for the source to start sending bytes for the fallback request.',
+      );
       firstChunk = await readFirstChunkWithTimeout(
         fallbackReader,
         NO_RANGE_FALLBACK_TIMEOUT_MS,
       );
+      if (firstChunk && firstChunk.byteLength > 0) {
+        await reportProgress?.(
+          'first_byte_received',
+          'First Bytes Received',
+          'Initial media bytes arrived from the fallback request.',
+        );
+      }
       firstByteReadStrategy = 'no_range_fallback';
     } catch (err) {
       const isReadTimeout =
@@ -642,6 +707,13 @@ export async function fetchMediaChunk(
   }
 
   const supportsRemoteSeekReads = didHonorRangeRequest(response);
+  if (!supportsRemoteSeekReads) {
+    await reportProgress?.(
+      'source_range_unsupported',
+      'Source Ignored Range Requests',
+      'The source did not honor byte-range requests, so analysis will continue without remote seek reads.',
+    );
+  }
 
   if (filenameSource === 'url') {
     const getFilename = parseContentDispositionFilename(
@@ -720,7 +792,13 @@ export async function fetchMediaChunk(
     byteSource: archiveEntry
       ? undefined
       : supportsRemoteSeekReads
-        ? createRemoteByteSource(targetUrl, rawBuffer, fileSize, diagnostics)
+        ? createRemoteByteSource(
+            targetUrl,
+            rawBuffer,
+            fileSize,
+            diagnostics,
+            reportProgress,
+          )
         : undefined,
     filename,
     filenameSource,

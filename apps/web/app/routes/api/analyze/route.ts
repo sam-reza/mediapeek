@@ -3,6 +3,7 @@ import type { AnalyzeErrorCode } from '@mediapeek/shared/analyze-contract';
 import type { AppType } from 'mediapeek-analyzer';
 import type { MediaInfoDiagnostics } from '~/services/mediainfo.server';
 
+import { ANALYZE_PROGRESS_STREAM_CONTENT_TYPE } from '@mediapeek/shared/analyze-progress';
 import {
   redactSensitiveUrl,
   summarizeSensitiveToken,
@@ -69,6 +70,12 @@ type ParsedAnalyzeInput = {
 
 const getRequestId = (request: Request) =>
   request.headers.get('cf-ray') ?? crypto.randomUUID();
+
+const wantsProgressStream = (request: Request) =>
+  request.headers
+    .get('accept')
+    ?.toLowerCase()
+    .includes(ANALYZE_PROGRESS_STREAM_CONTENT_TYPE) ?? false;
 
 const getClientIp = (request: Request) =>
   request.headers.get('CF-Connecting-IP') ??
@@ -608,6 +615,38 @@ async function handleAnalyzeRequest({ request, context }: AnalyzeRouteArgs) {
         analyzerRequestOptions.headers = {
           'x-api-key': analyzerApiKey,
         };
+      }
+
+      if (wantsProgressStream(request)) {
+        const streamResponse = await analyzerBinding.fetch(
+          'https://analyzer/analyze',
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              accept: ANALYZE_PROGRESS_STREAM_CONTENT_TYPE,
+              ...(analyzerRequestOptions.headers ?? {}),
+            },
+            body: JSON.stringify({
+              url: initialUrl,
+              format: requestedFormats,
+            }),
+          },
+        );
+
+        customContext.analyzerStatus = streamResponse.status;
+        customContext.analyzerContentType =
+          streamResponse.headers.get('content-type')?.toLowerCase() ?? '';
+
+        return new Response(streamResponse.body, {
+          status: streamResponse.status,
+          headers: mergeHeaders(
+            streamResponse.headers,
+            compatibilityHeaders,
+            grantCookieHeader ? { 'Set-Cookie': grantCookieHeader } : undefined,
+            { 'Cache-Control': 'no-store' },
+          ),
+        });
       }
 
       const rpcResponse = await client.analyze.$post(

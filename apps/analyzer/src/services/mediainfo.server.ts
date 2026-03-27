@@ -1,3 +1,5 @@
+import type { AnalyzeProgressStage } from '@mediapeek/shared/analyze-progress';
+
 import {
   ARCHIVE_SIZING_WARNING,
   type ArchiveEntryInspection,
@@ -74,6 +76,11 @@ export interface MediaInfoAnalysis {
 }
 
 export type MediaInfoFormat = 'object' | 'Text' | 'XML' | 'HTML';
+export type AnalysisProgressReporter = (
+  stage: AnalyzeProgressStage,
+  title: string,
+  message: string,
+) => Promise<void> | void;
 
 /**
  * Wrapper to make MediaInfo compatible with 'using' keyword (Explicit Resource Management)
@@ -103,6 +110,7 @@ export async function analyzeMediaBuffer(
   cpuBudgetMs: number = DEFAULT_ANALYSIS_CPU_BUDGET_MS,
   archiveEntry?: ArchiveEntryInspection,
   remoteReadChunk?: (size: number, offset: number) => Promise<Uint8Array>,
+  reportProgress?: AnalysisProgressReporter,
 ): Promise<MediaInfoAnalysis> {
   const tStart = performance.now();
 
@@ -179,6 +187,12 @@ export async function analyzeMediaBuffer(
 
       diagnostics.factoryCreateTimeMs = Math.round(
         performance.now() - tFactory,
+      );
+
+      await reportProgress?.(
+        'analysis_started',
+        'Running Media Analysis',
+        'MediaInfo is parsing the bytes fetched from the source.',
       );
 
       for (const { type, key } of formatsToGenerate) {
@@ -305,6 +319,11 @@ export async function analyzeMediaBuffer(
   }
 
   diagnostics.totalAnalysisTimeMs = Math.round(performance.now() - tStart);
+  await reportProgress?.(
+    'analysis_completed',
+    'Analysis Complete',
+    'Media analysis finished. Preparing the final response.',
+  );
   return {
     results,
     diagnostics,

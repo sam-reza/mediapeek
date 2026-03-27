@@ -6,6 +6,7 @@ import {
   ClipboardIcon,
   Loading03Icon,
 } from '@hugeicons/core-free-icons';
+import { ANALYZE_PROGRESS_STREAM_CONTENT_TYPE } from '@mediapeek/shared/analyze-progress';
 import {
   Alert,
   AlertDescription,
@@ -35,6 +36,10 @@ import {
 
 import { MediaSkeleton } from '~/components/media-skeleton';
 import { useClipboardSuggestion } from '~/hooks/use-clipboard-suggestion';
+import {
+  isAnalyzeProgressStreamResponse,
+  readAnalyzeStreamResponse,
+} from '~/lib/analyze-stream';
 
 import { useHapticFeedback } from '../hooks/use-haptic';
 import { MediaView } from './media-view';
@@ -116,6 +121,11 @@ interface AnalyzeRequestError extends Error {
   retryable?: boolean;
 }
 
+interface PendingStatus {
+  title: string;
+  message: string;
+}
+
 const initialState: FormState = {
   results: null,
   error: null,
@@ -126,9 +136,7 @@ const initialState: FormState = {
 const ANALYZE_REQUEST_TIMEOUT_MS = 90_000;
 const MAX_ANALYZE_RETRIES = 2;
 const RETRY_BACKOFF_MS = 1_500;
-const SLOW_STATUS_DELAY_MS = 5_000;
-const SLOW_STATUS_MESSAGE =
-  'Source server is taking longer than usual. Still trying...';
+const PROGRESS_VISIBILITY_DELAY_MS = 5_000;
 const RETRYABLE_HTTP_STATUSES = new Set([502, 503, 504]);
 
 export function MediaForm() {
@@ -146,9 +154,10 @@ export function MediaForm() {
   const [isTurnstileDialogOpen, setIsTurnstileDialogOpen] = useState(false);
   const [state, setState] = useState<FormState>(initialState);
   const [isPending, setIsPending] = useState(false);
-  const [pendingStatusMessage, setPendingStatusMessage] = useState<
-    string | null
-  >(null);
+  const [pendingStatus, setPendingStatus] = useState<PendingStatus | null>(
+    null,
+  );
+  const [shouldShowPendingStatus, setShouldShowPendingStatus] = useState(false);
 
   const enableTurnstile =
     typeof window !== 'undefined'
@@ -168,20 +177,6 @@ export function MediaForm() {
     // In Safari, reading on focus triggers an annoying system "Paste" bubble, so we skip it there.
     isClipboardApiSupported,
   } = useClipboardSuggestion(state.url);
-
-  useEffect(() => {
-    if (!isPending || pendingStatusMessage) {
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      setPendingStatusMessage((current) => current ?? SLOW_STATUS_MESSAGE);
-    }, SLOW_STATUS_DELAY_MS);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [isPending, pendingStatusMessage]);
 
   const settleTurnstileTokenRequest = useCallback((token: string | null) => {
     const resolve = turnstileTokenResolverRef.current;
@@ -219,6 +214,21 @@ export function MediaForm() {
     },
     [settleTurnstileTokenRequest],
   );
+
+  useEffect(() => {
+    if (!isPending) {
+      setShouldShowPendingStatus(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setShouldShowPendingStatus(true);
+    }, PROGRESS_VISIBILITY_DELAY_MS);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [isPending]);
 
   const submitAnalysis = async (formData: FormData) => {
     const url = formData.get('url') as string;
@@ -266,7 +276,11 @@ export function MediaForm() {
       });
 
     setIsPending(true);
-    setPendingStatusMessage(null);
+    setShouldShowPendingStatus(false);
+    setPendingStatus({
+      title: 'Submitting Request',
+      message: 'Sending the analysis request to the server.',
+    });
     setState((prev) => ({ ...prev, error: null, status: 'Loading' }));
     const startTime = performance.now();
 
@@ -284,6 +298,7 @@ export function MediaForm() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              Accept: ANALYZE_PROGRESS_STREAM_CONTENT_TYPE,
               'CF-Turnstile-Response': turnstileToken,
             },
             body: JSON.stringify({
@@ -293,22 +308,50 @@ export function MediaForm() {
             signal: controller.signal,
           });
 
-          const contentType = response.headers.get('content-type');
           let data: AnalyzeResponse = {};
 
-          if (contentType?.includes('application/json')) {
-            data = await response.json();
-          } else {
-            const text = await response.text();
-            if (!response.ok) {
+          if (isAnalyzeProgressStreamResponse(response)) {
+            const terminalEvent = await readAnalyzeStreamResponse(
+              response,
+              (event) => {
+                setPendingStatus({
+                  title: event.title,
+                  message: event.message,
+                });
+              },
+            );
+
+            if (terminalEvent.type === 'error') {
               throw createAnalyzeError(
-                `Server Error (${String(response.status)}): The analysis server failed or timed out.`,
+                terminalEvent.error.message,
                 response.status,
-                RETRYABLE_HTTP_STATUSES.has(response.status),
+                terminalEvent.error.retryable,
               );
             }
-            console.error('Unexpected non-JSON response:', text);
-            throw createAnalyzeError('Received invalid response from server.');
+
+            data = {
+              success: true,
+              requestId: terminalEvent.requestId,
+              results: terminalEvent.results,
+            };
+          } else {
+            const contentType = response.headers.get('content-type');
+            if (!contentType?.includes('application/json')) {
+              const text = await response.text();
+              if (!response.ok) {
+                throw createAnalyzeError(
+                  `Server Error (${String(response.status)}): The analysis server failed or timed out.`,
+                  response.status,
+                  RETRYABLE_HTTP_STATUSES.has(response.status),
+                );
+              }
+              console.error('Unexpected non-JSON response:', text);
+              throw createAnalyzeError(
+                'Received invalid response from server.',
+              );
+            }
+
+            data = await response.json();
           }
 
           const errorMessage =
@@ -333,14 +376,15 @@ export function MediaForm() {
             url,
             duration: endTime - startTime,
           });
-          setPendingStatusMessage(null);
+          setPendingStatus(null);
           return;
         } catch (err) {
           lastError = err;
           if (attempt < MAX_ANALYZE_RETRIES && isRetryableRequestError(err)) {
-            setPendingStatusMessage(
-              `Server is slow or unavailable. Retrying (${String(attempt + 1)}/${String(MAX_ANALYZE_RETRIES)})...`,
-            );
+            setPendingStatus({
+              title: 'Retrying Request',
+              message: `The request failed before completion. Retrying (${String(attempt + 1)}/${String(MAX_ANALYZE_RETRIES)}).`,
+            });
             await wait(RETRY_BACKOFF_MS * (attempt + 1));
             continue;
           }
@@ -365,7 +409,8 @@ export function MediaForm() {
       });
     } finally {
       setIsPending(false);
-      setPendingStatusMessage(null);
+      setShouldShowPendingStatus(false);
+      setPendingStatus(null);
       pendingFormDataRef.current = null;
       turnstileWidgetRef.current?.reset();
       if (turnstileInputRef.current) {
@@ -569,11 +614,11 @@ export function MediaForm() {
           )}
         </div>
       </div>
-      {isPending && pendingStatusMessage && (
+      {isPending && shouldShowPendingStatus && pendingStatus && (
         <div className="mb-4 w-full">
           <Alert>
-            <AlertTitle>Processing</AlertTitle>
-            <AlertDescription>{pendingStatusMessage}</AlertDescription>
+            <AlertTitle>{pendingStatus.title}</AlertTitle>
+            <AlertDescription>{pendingStatus.message}</AlertDescription>
           </Alert>
         </div>
       )}

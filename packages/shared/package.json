@@ -20,6 +20,10 @@
       "types": "./dist/analyze-contract.d.ts",
       "default": "./src/analyze-contract.ts"
     },
+    "./analyze-progress": {
+      "types": "./dist/analyze-progress.d.ts",
+      "default": "./src/analyze-progress.ts"
+    },
     "./archive-inspection": {
       "types": "./dist/archive-inspection.d.ts",
       "default": "./src/archive-inspection.ts"

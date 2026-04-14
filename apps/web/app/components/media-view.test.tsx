@@ -4,10 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { MediaView } from './media-view';
 
-const fetchAnalyzeFormatMock = vi.fn();
+type FetchAnalyzeFormat = typeof import('~/lib/analyze-client').fetchAnalyzeFormat;
+
+const fetchAnalyzeFormatMock = vi.fn<FetchAnalyzeFormat>();
 
 vi.mock('~/lib/analyze-client', () => ({
-  fetchAnalyzeFormat: (...args: unknown[]) => fetchAnalyzeFormatMock(...args),
+  fetchAnalyzeFormat: fetchAnalyzeFormatMock,
 }));
 
 vi.mock('./media-view/general-section', () => ({
@@ -55,8 +57,11 @@ describe('MediaView', () => {
     fetchAnalyzeFormatMock.mockResolvedValue({
       ok: true,
       content: 'General\nComplete name : file.mp4',
+      retriedWithTurnstile: false,
     });
-    const requestTurnstileToken = vi.fn().mockResolvedValue('token-123');
+    const requestTurnstileToken = vi
+      .fn<() => Promise<string | null>>()
+      .mockResolvedValue('token-123');
 
     render(
       <MediaView

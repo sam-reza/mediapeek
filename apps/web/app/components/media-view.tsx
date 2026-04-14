@@ -86,37 +86,39 @@ export const MediaView = memo(function MediaView({
 
   // Lazy-load text output on demand using POST to avoid exposing URLs in query strings.
   useEffect(() => {
-    if (!isTextView || data.text || fetchedText) return;
-
-    let cancelled = false;
-    const loadText = async () => {
-      setIsTextLoading(true);
-      try {
-        const result = await fetchAnalyzeFormat({
-          url,
-          format: 'text',
-          requestTurnstileToken,
-        });
-        if (!result.ok) {
-          throw new Error(result.message);
+    if (isTextView && !data.text && !fetchedText) {
+      let cancelled = false;
+      const loadText = async () => {
+        setIsTextLoading(true);
+        try {
+          const result = await fetchAnalyzeFormat({
+            url,
+            format: 'text',
+            requestTurnstileToken,
+          });
+          if (!result.ok) {
+            throw new Error(result.message);
+          }
+          if (!cancelled) {
+            setFetchedText(result.content);
+          }
+        } catch (error) {
+          console.error('Failed to lazy-load text output', error);
+        } finally {
+          if (!cancelled) {
+            setIsTextLoading(false);
+          }
         }
-        if (!cancelled) {
-          setFetchedText(result.content);
-        }
-      } catch (error) {
-        console.error('Failed to lazy-load text output', error);
-      } finally {
-        if (!cancelled) {
-          setIsTextLoading(false);
-        }
-      }
-    };
+      };
 
-    void loadText();
+      void loadText();
 
-    return () => {
-      cancelled = true;
-    };
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    return undefined;
   }, [data.text, fetchedText, isTextView, requestTurnstileToken, url]);
 
   // Handle Escape key to exit full screen

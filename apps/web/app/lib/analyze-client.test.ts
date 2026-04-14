@@ -53,7 +53,9 @@ describe('fetchAnalyzeFormat', () => {
         jsonResponse({ success: true, results: { xml: '<xml />' } }),
       );
 
-    const requestTurnstileToken = vi.fn().mockResolvedValue('token-123');
+    const requestTurnstileToken = vi
+      .fn<() => Promise<string | null>>()
+      .mockResolvedValue('token-123');
     const result = await fetchAnalyzeFormat({
       url: 'https://example.com/video.mp4',
       format: 'xml',
@@ -89,7 +91,9 @@ describe('fetchAnalyzeFormat', () => {
       ),
     );
 
-    const requestTurnstileToken = vi.fn().mockResolvedValue(null);
+    const requestTurnstileToken = vi
+      .fn<() => Promise<string | null>>()
+      .mockResolvedValue(null);
     const result = await fetchAnalyzeFormat({
       url: 'https://example.com/video.mp4',
       format: 'text',
@@ -120,7 +124,9 @@ describe('fetchAnalyzeFormat', () => {
       ),
     );
 
-    const requestTurnstileToken = vi.fn().mockResolvedValue('unused');
+    const requestTurnstileToken = vi
+      .fn<() => Promise<string | null>>()
+      .mockResolvedValue('unused');
     const result = await fetchAnalyzeFormat({
       url: 'https://example.com/video.mp4',
       format: 'html',

@@ -45,54 +45,56 @@ export const TurnstileWidget = forwardRef<
   }));
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (containerRef.current) {
+      // Wait for turnstile to be available
+      const checkTurnstile = setInterval(() => {
+        // Type assertion as we check existence
+        const turnstile = window.turnstile;
 
-    // Wait for turnstile to be available
-    const checkTurnstile = setInterval(() => {
-      // Type assertion as we check existence
-      const turnstile = window.turnstile;
-
-      if (turnstile && containerRef.current) {
-        clearInterval(checkTurnstile);
-        // Check ref instead of state to avoid stale closure issues during initial mount/setup
-        if (!widgetIdRef.current) {
-          try {
-            const siteKey = getTurnstileSiteKey();
-            if (!siteKey) {
-              throw new Error('TURNSTILE_SITE_KEY is missing.');
+        if (turnstile && containerRef.current) {
+          clearInterval(checkTurnstile);
+          // Check ref instead of state to avoid stale closure issues during initial mount/setup
+          if (!widgetIdRef.current) {
+            try {
+              const siteKey = getTurnstileSiteKey();
+              if (!siteKey) {
+                throw new Error('TURNSTILE_SITE_KEY is missing.');
+              }
+              const id = turnstile.render(containerRef.current, {
+                sitekey: siteKey,
+                callback: (token) => {
+                  callbacksRef.current.onVerify(token);
+                  setIsVerified(true);
+                },
+                'error-callback': () => {
+                  callbacksRef.current.onError?.();
+                },
+                'expired-callback': () => {
+                  callbacksRef.current.onExpire?.();
+                  setIsVerified(false);
+                },
+                theme: 'auto',
+              });
+              setWidgetId(id);
+              widgetIdRef.current = id;
+            } catch (e) {
+              console.error('Turnstile render error:', e);
             }
-            const id = turnstile.render(containerRef.current, {
-              sitekey: siteKey,
-              callback: (token) => {
-                callbacksRef.current.onVerify(token);
-                setIsVerified(true);
-              },
-              'error-callback': () => {
-                callbacksRef.current.onError?.();
-              },
-              'expired-callback': () => {
-                callbacksRef.current.onExpire?.();
-                setIsVerified(false);
-              },
-              theme: 'auto',
-            });
-            setWidgetId(id);
-            widgetIdRef.current = id;
-          } catch (e) {
-            console.error('Turnstile render error:', e);
           }
         }
-      }
-    }, 100);
+      }, 100);
 
-    return () => {
-      clearInterval(checkTurnstile);
-      if (widgetIdRef.current && window.turnstile) {
-        window.turnstile.remove(widgetIdRef.current);
-        widgetIdRef.current = null;
-        setWidgetId(null);
-      }
-    };
+      return () => {
+        clearInterval(checkTurnstile);
+        if (widgetIdRef.current && window.turnstile) {
+          window.turnstile.remove(widgetIdRef.current);
+          widgetIdRef.current = null;
+          setWidgetId(null);
+        }
+      };
+    }
+
+    return undefined;
   }, []);
 
   // Hide when verified to clean up UI, but keep mounted if needed (logic specific to use case)

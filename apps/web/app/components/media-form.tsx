@@ -152,7 +152,7 @@ export function MediaForm() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [isTurnstileDialogOpen, setIsTurnstileDialogOpen] = useState(false);
-  const [state, setState] = useState<FormState>(initialState);
+  const [state, setState] = useState(initialState);
   const [isPending, setIsPending] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<PendingStatus | null>(
     null,
@@ -216,18 +216,18 @@ export function MediaForm() {
   );
 
   useEffect(() => {
-    if (!isPending) {
-      setShouldShowPendingStatus(false);
-      return;
+    if (isPending) {
+      const timeoutId = setTimeout(() => {
+        setShouldShowPendingStatus(true);
+      }, PROGRESS_VISIBILITY_DELAY_MS);
+
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }
 
-    const timeoutId = setTimeout(() => {
-      setShouldShowPendingStatus(true);
-    }, PROGRESS_VISIBILITY_DELAY_MS);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
+    setShouldShowPendingStatus(false);
+    return undefined;
   }, [isPending]);
 
   const submitAnalysis = async (formData: FormData) => {

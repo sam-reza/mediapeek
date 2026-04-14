@@ -9,9 +9,7 @@ import { Theme, useTheme } from 'remix-themes';
 export function ModeToggle() {
   const loaderData = useRouteLoaderData<typeof loader>('root');
   const serverTheme = loaderData?.theme; // Access theme from loader data (source of truth for preference)
-  const [themeState, setThemeState] = useState<Theme | null | undefined>(
-    serverTheme,
-  );
+  const [themeState, setThemeState] = useState(serverTheme);
   const [, setTheme] = useTheme(); // useTheme used only for setting
 
   useEffect(() => {

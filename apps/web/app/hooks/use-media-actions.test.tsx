@@ -4,36 +4,51 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useMediaActions } from './use-media-actions';
 
-const fetchAnalyzeFormatMock = vi.fn();
-const safeClipboardWriteMock = vi.fn();
-const uploadToPrivateBinMock = vi.fn();
+type FetchAnalyzeFormat = typeof import('../lib/analyze-client').fetchAnalyzeFormat;
+type SafeClipboardWrite = typeof import('../lib/clipboard').safeClipboardWrite;
+type UploadToPrivateBin = typeof import('../lib/privatebin').uploadToPrivateBin;
+
+const fetchAnalyzeFormatMock = vi.fn<FetchAnalyzeFormat>();
+const safeClipboardWriteMock = vi.fn<SafeClipboardWrite>();
+const uploadToPrivateBinMock = vi.fn<UploadToPrivateBin>();
+const triggerSuccessMock = vi.fn<() => void>();
+const triggerErrorMock = vi.fn<() => void>();
+const triggerCreativeSuccessMock = vi.fn<() => void>();
+const toastLoadingMock = vi.fn<(message: string) => string>(() => 'toast-id');
+const toastDismissMock = vi.fn<(id?: string | number) => void>();
+const toastErrorMock = vi.fn<
+  (message: string, options?: Record<string, unknown>) => void
+>();
+const toastSuccessMock = vi.fn<
+  (message: string, options?: Record<string, unknown>) => void
+>();
 
 vi.mock('../lib/analyze-client', () => ({
-  fetchAnalyzeFormat: (...args: unknown[]) => fetchAnalyzeFormatMock(...args),
+  fetchAnalyzeFormat: fetchAnalyzeFormatMock,
 }));
 
 vi.mock('../lib/clipboard', () => ({
-  safeClipboardWrite: (...args: unknown[]) => safeClipboardWriteMock(...args),
+  safeClipboardWrite: safeClipboardWriteMock,
 }));
 
 vi.mock('../lib/privatebin', () => ({
-  uploadToPrivateBin: (...args: unknown[]) => uploadToPrivateBinMock(...args),
+  uploadToPrivateBin: uploadToPrivateBinMock,
 }));
 
 vi.mock('./use-haptic', () => ({
   useHapticFeedback: () => ({
-    triggerSuccess: vi.fn(),
-    triggerError: vi.fn(),
-    triggerCreativeSuccess: vi.fn(),
+    triggerSuccess: triggerSuccessMock,
+    triggerError: triggerErrorMock,
+    triggerCreativeSuccess: triggerCreativeSuccessMock,
   }),
 }));
 
 vi.mock('sonner', () => ({
   toast: {
-    loading: vi.fn(() => 'toast-id'),
-    dismiss: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
+    loading: toastLoadingMock,
+    dismiss: toastDismissMock,
+    error: toastErrorMock,
+    success: toastSuccessMock,
   },
 }));
 
@@ -52,13 +67,14 @@ describe('useMediaActions', () => {
     fetchAnalyzeFormatMock.mockResolvedValue({
       ok: true,
       content: 'text-output',
+      retriedWithTurnstile: false,
     });
 
     const { result } = renderHook(() =>
       useMediaActions({
         data: {},
         url: 'https://example.com/video.mp4',
-        requestTurnstileToken: vi.fn(),
+        requestTurnstileToken: vi.fn<() => Promise<string | null>>(),
       }),
     );
 
@@ -80,7 +96,11 @@ describe('useMediaActions', () => {
   });
 
   it('caches share urls by format after first upload', async () => {
-    fetchAnalyzeFormatMock.mockResolvedValue({ ok: true, content: '<xml />' });
+    fetchAnalyzeFormatMock.mockResolvedValue({
+      ok: true,
+      content: '<xml />',
+      retriedWithTurnstile: false,
+    });
     uploadToPrivateBinMock.mockResolvedValue({
       url: 'https://privatebin.net/?abc#key',
       deleteUrl: 'https://privatebin.net/?pasteid=abc&deletetoken=def',
@@ -90,7 +110,7 @@ describe('useMediaActions', () => {
       useMediaActions({
         data: {},
         url: 'https://example.com/video.mp4',
-        requestTurnstileToken: vi.fn(),
+        requestTurnstileToken: vi.fn<() => Promise<string | null>>(),
       }),
     );
 

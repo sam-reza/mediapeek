@@ -16,22 +16,13 @@
   },
   "devDependencies": {
     "eslint-plugin-react-hooks": "^7.0.1",
-    "oxfmt": "^0.42.0",
-    "oxlint": "^1.57.0",
-    "oxlint-tsgolint": "^0.18.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.2"
+    "oxfmt": "^0.45.0",
+    "oxlint": "^1.60.0",
+    "oxlint-tsgolint": "^0.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.4"
   },
   "pnpm": {
-    "overrides": {
-      "vite": "7.3.1"
-    },
-    "updateConfig": {
-      "ignoreDependencies": [
-        "typescript",
-        "vite"
-      ]
-    },
     "onlyBuiltDependencies": [
       "esbuild",
       "msw",
